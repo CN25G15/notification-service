@@ -37,7 +37,7 @@ public class NotificationsEndpoint {
                     logger.fatalf("Internal error when converting Notification for user %s", uuid);
                     throw new WebApplicationException("Notification Parsing error", Response.Status.INTERNAL_SERVER_ERROR);
                 }
-            });
+            }) /* 🤔.onFailure(throwable -> ) */ ;
         } catch (IllegalArgumentException e) {
             throw new WebApplicationException("Invalid user id", Response.Status.BAD_REQUEST);
         }

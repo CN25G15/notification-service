@@ -70,10 +70,6 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-rest-client-jackson</artifactId>
         </dependency>
-        <!--<dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-jaxb</artifactId>
-        </dependency>-->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>
