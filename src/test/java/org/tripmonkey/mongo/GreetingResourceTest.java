@@ -1,4 +1,4 @@
-package org.tripmonkey;
+package org.tripmonkey.mongo;
 
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
