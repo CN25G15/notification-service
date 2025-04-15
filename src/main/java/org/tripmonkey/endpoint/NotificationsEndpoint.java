@@ -1,17 +1,17 @@
 package org.tripmonkey.endpoint;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.util.JsonFormat;
+import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Multi;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import org.jboss.logging.Logger;
-import org.tripmonkey.notifications.NotificationsProvider;
 
+import org.eclipse.microprofile.reactive.messaging.Channel;
 
-import java.util.UUID;
+import org.tripmonkey.notification.service.Notification;
 
 @Path("/notifications/{uuid}")
 public class NotificationsEndpoint {
@@ -19,28 +19,22 @@ public class NotificationsEndpoint {
     @Inject
     ObjectMapper om;
 
-    private static Logger logger = Logger.getLogger(NotificationsEndpoint.class);
-
     @Inject
-    NotificationsProvider nopro;
+    @Channel("notifications-service")
+    Multi<Notification> workspace_service;
 
     @GET
     @Produces(MediaType.SERVER_SENT_EVENTS)
     public Multi<String> feedNotifications(@PathParam("uuid") String uuid) {
-        logger.infof("Received a request for an SSE connection for client %s", uuid);
-        try {
-            UUID user = UUID.fromString(uuid);
-            return nopro.poll().filter(notification -> notification.shouldSend(user)).map(notification -> {
-                try {
-                    return om.writeValueAsString(notification);
-                } catch (JsonProcessingException e) {
-                    logger.fatalf("Internal error when converting Notification for user %s", uuid);
-                    throw new WebApplicationException("Notification Parsing error", Response.Status.INTERNAL_SERVER_ERROR);
-                }
-            });
-        } catch (IllegalArgumentException e) {
-            throw new WebApplicationException("Invalid user id", Response.Status.BAD_REQUEST);
-        }
+        return workspace_service.filter(workspacePatch ->
+                        workspacePatch.getUsersList().stream().anyMatch(user -> user.getUserId().equals(uuid)))
+                .map(workspacePatch -> {
+                    try {
+                        return JsonFormat.printer().print(workspacePatch);
+                    } catch (InvalidProtocolBufferException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).onFailure().recoverWithItem("Internal server error");
     }
 
 }
