@@ -12,6 +12,6 @@ public class SimpleHealthCheck implements HealthCheck {
 
     @Override
     public HealthCheckResponse call() {
-        return HealthCheckResponse.up("Simple health check");
+        return HealthCheckResponse.named("Notification Service Liveness").up().build();
     }
 }
