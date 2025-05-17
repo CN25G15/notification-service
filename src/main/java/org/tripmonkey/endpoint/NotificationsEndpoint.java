@@ -11,13 +11,14 @@ import jakarta.ws.rs.core.MediaType;
 
 import org.eclipse.microprofile.reactive.messaging.Channel;
 
+import org.jboss.logging.Logger;
 import org.tripmonkey.notification.service.Notification;
 
 @Path("/notifications/{uuid}")
 public class NotificationsEndpoint {
 
     @Inject
-    ObjectMapper om;
+    Logger log;
 
     @Inject
     @Channel("notifications-service")
@@ -26,11 +27,16 @@ public class NotificationsEndpoint {
     @GET
     @Produces(MediaType.SERVER_SENT_EVENTS)
     public Multi<String> feedNotifications(@PathParam("uuid") String uuid) {
-        return workspace_service.filter(workspacePatch ->
+        log.infof("Initialized SSE session for user %s", uuid);
+        return workspace_service.onItem().transform(notification -> {
+                    log.infof("Received notification %s", notification);
+                    return notification;
+                })
+                .filter(workspacePatch ->
                         workspacePatch.getUsersList().stream().anyMatch(user -> user.getUserId().equals(uuid)))
                 .map(workspacePatch -> {
                     try {
-                        return JsonFormat.printer().print(workspacePatch);
+                        return JsonFormat.printer().print(workspacePatch.getAction());
                     } catch (InvalidProtocolBufferException e) {
                         throw new RuntimeException(e);
                     }
