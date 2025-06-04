@@ -20,6 +20,7 @@ import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.jboss.logging.Logger;
 import org.tripmonkey.notification.service.Notification;
 
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Path("/notifications/{uuid}")
@@ -52,19 +53,20 @@ public class NotificationsEndpoint {
         totalClients.getAndIncrement();
         log.infof("Initialized SSE session for user %s", uuid);
         return workspace_service.runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
-                .onItem().transform(notification -> {
-                    log.infof("Received notification %s", notification);
-                    return notification;
-                })
+                .onItem()
+                .invoke(notification -> log.infof("Received notification %s", notification))
                 .filter(workspacePatch ->
                         workspacePatch.getUsersList().stream().anyMatch(user -> user.getUserId().equals(uuid)))
-                .map(workspacePatch -> {
+                .onItem().transform(workspacePatch -> {
                     try {
                         return JsonFormat.printer().print(workspacePatch.getAction());
                     } catch (InvalidProtocolBufferException e) {
                         throw new RuntimeException(e);
                     }
-                }).onFailure().recoverWithItem("Internal server error")
+                })
+                // necessary keep alive for SSE connections
+                .ifNoItem().after(Duration.ofSeconds(5)).recoverWithMulti(Multi.createFrom().item("keep_alive"))
+                .onFailure().recoverWithItem("Internal server error")
                 .onTermination().invoke(() -> totalClients.getAndDecrement());
     }
 
