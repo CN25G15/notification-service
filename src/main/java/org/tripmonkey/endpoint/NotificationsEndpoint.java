@@ -26,6 +26,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Path("/notifications/{uuid}")
 public class NotificationsEndpoint {
 
+    private static class NoNotificationTimeoutException extends RuntimeException{
+    }
+
     @Inject
     Logger log;
 
@@ -53,8 +56,9 @@ public class NotificationsEndpoint {
         totalClients.getAndIncrement();
         log.infof("Initialized SSE session for user %s", uuid);
         return workspace_service.runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                .ifNoItem().after(Duration.ofSeconds(5)).failWith(NoNotificationTimeoutException::new)
                 .onItem()
-                .invoke(notification -> log.infof("Received notification %s", notification))
+                 .invoke(notification -> log.infof("Received notification %s", notification))
                 .filter(workspacePatch ->
                         workspacePatch.getUsersList().stream().anyMatch(user -> user.getUserId().equals(uuid)))
                 .onItem().transform(workspacePatch -> {
@@ -65,8 +69,9 @@ public class NotificationsEndpoint {
                     }
                 })
                 // necessary keep alive for SSE connections
-                .ifNoItem().after(Duration.ofSeconds(5)).recoverWithMulti(Multi.createFrom().item("keep_alive"))
-                .onFailure().recoverWithItem("Internal server error")
+                .onFailure(throwable -> throwable instanceof NoNotificationTimeoutException)
+                .recoverWithMulti(Multi.createFrom().item("keep_alive")).invoke(() -> log.info("Sending keep_alive to user."))
+                .onFailure(throwable -> !(throwable instanceof NoNotificationTimeoutException)).recoverWithItem("Internal server error")
                 .onTermination().invoke(() -> totalClients.getAndDecrement());
     }
 
